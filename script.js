@@ -1,3 +1,6 @@
+import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
+
 const dropArea = document.getElementById('drop-area');
 const fileInput = document.getElementById('file-input');
 const fileInfo = document.getElementById('file-info');
@@ -29,35 +32,32 @@ function updateEstimate() {
 }
 qualitySelect.addEventListener('change', updateEstimate);
 
-// 2. Carregamento do motor FFmpeg (versão compatível com GitHub Pages)
+// 2. Carregamento do motor FFmpeg
 async function loadFFmpeg() {
     if (ffmpeg) return;
     statusText.innerText = 'Carregando motor de compressão...';
     progressContainer.classList.remove('hidden');
     
-    ffmpeg = new window.FFmpeg();
+    ffmpeg = new FFmpeg();
     ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
     ffmpeg.on('progress', ({ progress }) => {
         progressBar.value = progress * 100;
     });
 
     try {
-        // Usando a versão Single-Thread (funciona sem precisar de SharedArrayBuffer)
+        // Usando a versão Single-Thread (evita erro de SharedArrayBuffer)
         const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/umd';
-        
-        const [coreURL, wasmURL] = await Promise.all([
-            window.toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
-            window.toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm')
-        ]);
+        const workerBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm';
 
-        // Usando os arquivos locais que você baixou para a pasta 'ffmpeg'
-        const workerURL = new URL('ffmpeg/worker.js', window.location.href).href;
-        const classWorkerURL = new URL('ffmpeg/worker.js', window.location.href).href;
+        const [coreURL, wasmURL, classWorkerURL] = await Promise.all([
+            toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
+            toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            toBlobURL(`${workerBaseURL}/worker.js`, 'text/javascript')
+        ]);
 
         await ffmpeg.load({ 
             coreURL, 
             wasmURL, 
-            workerURL, 
             classWorkerURL 
         });
         
@@ -71,10 +71,8 @@ async function loadFFmpeg() {
     }
 }
 
-// 3. Eventos de Upload (Arrastar, soltar e clicar)
-dropArea.addEventListener('click', () => {
-    fileInput.click();
-});
+// 3. Eventos de Upload
+dropArea.addEventListener('click', () => fileInput.click());
 dropArea.addEventListener('dragover', (e) => { 
     e.preventDefault(); 
     dropArea.classList.add('highlight'); 
@@ -115,7 +113,7 @@ async function handleFile(file) {
         await loadFFmpeg();
         compressBtn.disabled = false;
     } catch (e) {
-        // O erro já é mostrado na tela pela função loadFFmpeg
+        // Erro já mostrado na tela
     }
 }
 
@@ -133,7 +131,7 @@ compressBtn.addEventListener('click', async () => {
     const crf = qualitySelect.value;
 
     try {
-        await ffmpeg.writeFile(inputName, await window.fetchFile(currentFile));
+        await ffmpeg.writeFile(inputName, await fetchFile(currentFile));
         
         await ffmpeg.exec([
             '-i', inputName,
@@ -145,15 +143,13 @@ compressBtn.addEventListener('click', async () => {
             outputName
         ]);
 
-        // Limpa o arquivo original da memória para não travar
-        await ffmpeg.deleteFile(inputName);
+        await ffmpeg.deleteFile(inputName); // Limpa memória
 
         const data = await ffmpeg.readFile(outputName);
         const blob = new Blob([data.buffer], { type: 'video/mp4' });
         const url = URL.createObjectURL(blob);
         
-        // Limpa o arquivo comprimido da memória
-        await ffmpeg.deleteFile(outputName);
+        await ffmpeg.deleteFile(outputName); // Limpa memória
 
         const baseName = currentFile.name.replace(/\.[^/.]+$/, '');
         downloadLink.href = url;
