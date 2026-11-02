@@ -17,7 +17,7 @@ let ffmpeg = null;
 let currentFile = null;
 let videoDuration = 0;
 
-// Inicializa o FFmpeg de forma robusta
+// 1. Carrega o FFmpeg (agora com o Worker protegido por BlobURL)
 async function loadFFmpeg() {
     if (ffmpeg) return;
     statusText.innerText = 'Carregando motor de compressão (pode levar alguns segundos)...';
@@ -30,38 +30,45 @@ async function loadFFmpeg() {
     });
 
     try {
-        // Usando jsDelivr, que é mais confiável para este tipo de arquivo
         const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
-        
-        const [coreURL, wasmURL] = await Promise.all([
+        const ffmpegBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm';
+
+        // Prepara os Blob URLs para o core e para o worker (contorna o erro de CORS)
+        const [coreURL, wasmURL, classWorkerURL] = await Promise.all([
             window.toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-            window.toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+            window.toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            window.toBlobURL(`${ffmpegBaseURL}/worker.js`, 'text/javascript')
         ]);
 
-        await ffmpeg.load({ coreURL, wasmURL });
+        await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
         
-        // Se chegou aqui, o motor carregou. Liberamos a interface.
         progressContainer.classList.add('hidden');
         statusText.innerText = '';
-        
-        // O ponto crucial: habilitar o botão de compressão agora
         compressBtn.disabled = false;
 
     } catch (error) {
         console.error("Falha fatal ao carregar o FFmpeg:", error);
         statusText.innerText = '❌ Erro ao carregar o motor. Verifique o console (F12).';
         progressBar.value = 0;
-        // Não habilitamos o botão, pois a compressão não funcionará.
         throw error;
     }
 }
 
-// --- Lógica de upload (permanece a mesma, mas agora é ativada corretamente) ---
+// 2. Função de estimativa (restaurada)
+function updateEstimate() {
+    if (!videoDuration || !currentFile) return;
+    const crf = parseInt(qualitySelect.value);
+    const bitrateMap = { 23: 2000, 28: 1000, 32: 600 };
+    const videoBitrate = bitrateMap[crf] || 1000;
+    const audioBitrate = 128;
+    const estimatedSize = ((videoBitrate + audioBitrate) * 1000 * videoDuration) / 8 / (1024 * 1024);
+    estimate.innerText = `Tamanho estimado: ~${estimatedSize.toFixed(1)} MB`;
+}
+qualitySelect.addEventListener('change', updateEstimate);
+
+// 3. Lógica de upload
 dropArea.addEventListener('click', () => fileInput.click());
-dropArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropArea.classList.add('highlight');
-});
+dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('highlight'); });
 dropArea.addEventListener('dragleave', () => dropArea.classList.remove('highlight'));
 dropArea.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -92,16 +99,57 @@ async function handleFile(file) {
     options.classList.remove('hidden');
     downloadArea.classList.add('hidden');
     
-    // O upload é aceito imediatamente. O carregamento do motor acontece em paralelo.
     if (!ffmpeg) {
-        // Se o motor ainda não foi carregado, inicia o carregamento.
-        // O botão de compressão só será habilitado quando o load terminar.
         await loadFFmpeg();
     } else {
-        // Se o motor já estiver carregado, apenas habilita o botão.
         compressBtn.disabled = false;
     }
 }
 
-// O restante do código (updateEstimate e o listener de clique do compressBtn) continua igual
-// ...
+// 4. Executa a compressão
+compressBtn.addEventListener('click', async () => {
+    if (!currentFile || !ffmpeg) return;
+    compressBtn.disabled = true;
+    downloadArea.classList.add('hidden');
+    progressContainer.classList.remove('hidden');
+    statusText.innerText = 'Comprimindo...';
+    progressBar.value = 0;
+
+    const inputName = 'input' + currentFile.name.substring(currentFile.name.lastIndexOf('.'));
+    const outputName = 'output.mp4';
+    const crf = qualitySelect.value;
+
+    try {
+        await ffmpeg.writeFile(inputName, await window.fetchFile(currentFile));
+        
+        await ffmpeg.exec([
+            '-i', inputName,
+            '-vcodec', 'libx264',
+            '-crf', crf,
+            '-preset', 'medium',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            outputName
+        ]);
+
+        const data = await ffmpeg.readFile(outputName);
+        const blob = new Blob([data.buffer], { type: 'video/mp4' });
+        const url = URL.createObjectURL(blob);
+        
+        const baseName = currentFile.name.replace(/\.[^/.]+$/, '');
+        downloadLink.href = url;
+        downloadLink.download = `${baseName}_compressed.mp4`;
+        
+        downloadArea.classList.remove('hidden');
+        statusText.innerText = 'Concluído!';
+        progressBar.value = 100;
+    } catch (error) {
+        console.error(error);
+        statusText.innerText = 'Erro na compressão. Tente outro arquivo.';
+    } finally {
+        compressBtn.disabled = false;
+        try { await ffmpeg.deleteFile(inputName); } catch(e) {}
+        try { await ffmpeg.deleteFile(outputName); } catch(e) {}
+    }
+});
+
