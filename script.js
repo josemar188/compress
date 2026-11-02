@@ -17,7 +17,7 @@ let ffmpeg = null;
 let currentFile = null;
 let videoDuration = 0;
 
-// 1. Carrega o FFmpeg (agora com o Worker protegido por BlobURL)
+// 1. Carrega o FFmpeg contornando o erro de CORS do Worker
 async function loadFFmpeg() {
     if (ffmpeg) return;
     statusText.innerText = 'Carregando motor de compressão (pode levar alguns segundos)...';
@@ -30,17 +30,19 @@ async function loadFFmpeg() {
     });
 
     try {
+        // Usando jsDelivr para carregar os arquivos
         const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
         const ffmpegBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm';
 
-        // Prepara os Blob URLs para o core e para o worker (contorna o erro de CORS)
-        const [coreURL, wasmURL, classWorkerURL] = await Promise.all([
+        // A correção crucial: passar o worker.js e o classWorkerURL por toBlobURL
+        const [coreURL, wasmURL, workerURL, classWorkerURL] = await Promise.all([
             window.toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
             window.toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            window.toBlobURL(`${ffmpegBaseURL}/worker.js`, 'text/javascript'),
             window.toBlobURL(`${ffmpegBaseURL}/worker.js`, 'text/javascript')
         ]);
 
-        await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
+        await ffmpeg.load({ coreURL, wasmURL, workerURL, classWorkerURL });
         
         progressContainer.classList.add('hidden');
         statusText.innerText = '';
@@ -54,7 +56,7 @@ async function loadFFmpeg() {
     }
 }
 
-// 2. Função de estimativa (restaurada)
+// 2. Função de estimativa (que estava faltando)
 function updateEstimate() {
     if (!videoDuration || !currentFile) return;
     const crf = parseInt(qualitySelect.value);
