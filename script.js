@@ -152,4 +152,3 @@ compressBtn.addEventListener('click', async () => {
         try { await ffmpeg.deleteFile(outputName); } catch(e) {}
     }
 });
-
