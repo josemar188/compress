@@ -1,0 +1,65 @@
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f4f4f9;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+    margin: 0;
+}
+.container {
+    background: #fff;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    max-width: 600px;
+    width: 100%;
+}
+h1 { text-align: center; color: #1e293b; }
+.drop-area {
+    border: 3px dashed #94a3b8;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.3s;
+    margin: 1.5rem 0;
+}
+.drop-area.highlight { background: #e2e8f0; border-color: #3b82f6; }
+.browse { color: #3b82f6; text-decoration: underline; cursor: pointer; }
+.hidden { display: none; }
+#options { margin: 1.5rem 0; }
+label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+select, button {
+    width: 100%;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    font-size: 1rem;
+}
+button {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+button:hover:not(:disabled) { background: #2563eb; }
+button:disabled { background: #94a3b8; cursor: not-allowed; }
+.estimate { font-size: 0.9rem; color: #64748b; font-style: italic; }
+#progress-container { margin-top: 1.5rem; }
+progress { width: 100%; height: 1.5rem; }
+.download-btn {
+    display: inline-block;
+    background: #10b981;
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 6px;
+    text-decoration: none;
+    text-align: center;
+    font-weight: bold;
+    margin-top: 1rem;
+}
+.download-btn:hover { background: #059669; }
