@@ -10,16 +10,16 @@ async function loadFFmpeg() {
     });
 
     try {
-        const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+        // A MUDANÇA CRUCIAL: usar o core single-thread (@ffmpeg/core-st)
+        // que não exige SharedArrayBuffer e funciona no GitHub Pages.
+        const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/umd';
         
-        // Carrega o core e o wasm como Blob URLs (ainda do CDN, pois são grandes)
         const [coreURL, wasmURL] = await Promise.all([
             window.toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
             window.toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm')
         ]);
 
-        // Agora usamos os arquivos locais que você baixou para a pasta 'ffmpeg'
-        // O caminho é relativo à raiz do site.
+        // Usar os arquivos locais que você baixou para a pasta 'ffmpeg'
         const workerURL = new URL('ffmpeg/worker.js', window.location.href).href;
         const classWorkerURL = new URL('ffmpeg/worker.js', window.location.href).href;
 
